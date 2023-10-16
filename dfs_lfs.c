@@ -360,7 +360,7 @@ static int _dfs_lfs_unmount(struct dfs_filesystem* dfs)
 }
 
 #ifndef LFS_READONLY
-static int _dfs_lfs_mkfs(rt_device_t dev_id)
+static int _dfs_lfs_mkfs(rt_device_t dev_id, const char* fs_name)
 {
     int result;
     int index;
@@ -547,9 +547,9 @@ static int _dfs_lfs_open(struct dfs_fd* file)
     int flags = 0;
 
     RT_ASSERT(file != RT_NULL);
-    RT_ASSERT(file->data != RT_NULL);
+    RT_ASSERT(file->vnode != RT_NULL);
 
-    dfs = (struct dfs_filesystem*)file->data;
+    dfs = (struct dfs_filesystem*)file->vnode->fs;
     dfs_lfs = (dfs_lfs_t*)dfs->data;
 
     if (file->flags & O_DIRECTORY)
@@ -568,7 +568,7 @@ static int _dfs_lfs_open(struct dfs_fd* file)
         if (file->flags & O_CREAT)
         {
 #ifndef LFS_READONLY
-            result = lfs_mkdir(dfs_lfs_fd->lfs, file->path);
+            result = lfs_mkdir(dfs_lfs_fd->lfs, file->vnode->path);
 #else
             result = -EINVAL;
 #endif
@@ -578,7 +578,7 @@ static int _dfs_lfs_open(struct dfs_fd* file)
             }
         }
 
-        result = lfs_dir_open(dfs_lfs_fd->lfs, &dfs_lfs_fd->u.dir, file->path);
+        result = lfs_dir_open(dfs_lfs_fd->lfs, &dfs_lfs_fd->u.dir, file->vnode->path);
         if (result != LFS_ERR_OK)
         {
             goto _error_dir;
@@ -625,7 +625,7 @@ static int _dfs_lfs_open(struct dfs_fd* file)
         if (file->flags & O_APPEND)
             flags |= LFS_O_APPEND;
 
-        result = lfs_file_open(dfs_lfs_fd->lfs, &dfs_lfs_fd->u.file, file->path, flags);
+        result = lfs_file_open(dfs_lfs_fd->lfs, &dfs_lfs_fd->u.file, file->vnode->path, flags);
         if (result != LFS_ERR_OK)
         {
             goto _error_file;
@@ -634,7 +634,7 @@ static int _dfs_lfs_open(struct dfs_fd* file)
         {
             file->data = (void*)dfs_lfs_fd;
             file->pos = dfs_lfs_fd->u.file.pos;
-            file->size = dfs_lfs_fd->u.file.ctz.size;
+            file->vnode->size = dfs_lfs_fd->u.file.ctz.size;
             return RT_EOK;
         }
 
@@ -657,7 +657,7 @@ static int _dfs_lfs_close(struct dfs_fd* file)
 
     dfs_lfs_fd = (dfs_lfs_fd_t*)file->data;
 
-    if (file->type == FT_DIRECTORY)
+    if (file->vnode->type == FT_DIRECTORY)
     {
         result = lfs_dir_close(dfs_lfs_fd->lfs, &dfs_lfs_fd->u.dir);
     }
@@ -684,7 +684,7 @@ static int _dfs_lfs_read(struct dfs_fd* file, void* buf, size_t len)
     RT_ASSERT(file != RT_NULL);
     RT_ASSERT(file->data != RT_NULL);
 
-    if (file->type == FT_DIRECTORY)
+    if (file->vnode->type == FT_DIRECTORY)
     {
         return -EISDIR;
     }
@@ -722,7 +722,7 @@ static int _dfs_lfs_write(struct dfs_fd* file, const void* buf, size_t len)
     RT_ASSERT(file != RT_NULL);
     RT_ASSERT(file->data != RT_NULL);
 
-    if (file->type == FT_DIRECTORY)
+    if (file->vnode->type == FT_DIRECTORY)
     {
         return -EISDIR;
     }
@@ -748,7 +748,7 @@ static int _dfs_lfs_write(struct dfs_fd* file, const void* buf, size_t len)
 
     /* update position and file size */
     file->pos = dfs_lfs_fd->u.file.pos;
-    file->size = dfs_lfs_fd->u.file.ctz.size;
+    file->vnode->size = dfs_lfs_fd->u.file.ctz.size;
 
     return ssize;
 }
@@ -777,7 +777,7 @@ static int _dfs_lfs_lseek(struct dfs_fd* file, rt_off_t offset)
 
     dfs_lfs_fd = (dfs_lfs_fd_t*)file->data;
 
-    if (file->type == FT_REGULAR)
+    if (file->vnode->type == FT_REGULAR)
     {
         lfs_soff_t soff = lfs_file_seek(dfs_lfs_fd->lfs, &dfs_lfs_fd->u.file, offset, LFS_SEEK_SET);
         if (soff < 0)
@@ -787,7 +787,7 @@ static int _dfs_lfs_lseek(struct dfs_fd* file, rt_off_t offset)
 
         file->pos = dfs_lfs_fd->u.file.pos;
     }
-    else if (file->type == FT_DIRECTORY)
+    else if (file->vnode->type == FT_DIRECTORY)
     {
         lfs_soff_t soff = lfs_dir_seek(dfs_lfs_fd->lfs, &dfs_lfs_fd->u.dir, offset);
         if (soff < 0)
@@ -887,7 +887,7 @@ static const struct dfs_file_ops _dfs_lfs_fops = {
     _dfs_lfs_flush,
     _dfs_lfs_lseek,
     _dfs_lfs_getdents,
-    //    RT_NULL, /* poll interface */
+    RT_NULL, /* poll interface */
 };
 
 static const struct dfs_filesystem_ops _dfs_lfs_ops = {

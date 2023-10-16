@@ -19,7 +19,7 @@ extern "C"
 
 // Logging functions
 #ifdef LFS_YES_TRACE
-#define LFS_TRACE(fmt, ...) \
+#define LFS_TRACE_(fmt, ...) \
     rt_kprintf("%s:%d:trace: " fmt "%s\n", __FILE__, __LINE__, __VA_ARGS__)
 #define LFS_TRACE(...) LFS_TRACE_(__VA_ARGS__, "")
 #else
